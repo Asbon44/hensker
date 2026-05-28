@@ -1,0 +1,615 @@
+import React, { useState, useEffect } from 'react';
+import { Sparkles, ShoppingBag, ArrowRight, Save, Receipt, Check, FileText, Calendar, Compass, Layers, CheckCircle } from 'lucide-react';
+import { FLAVORS, ACCENTS } from '../data';
+import { CakeQuoteRequest, CakeQuoteResponse } from '../types';
+
+interface CakeCustomizerProps {
+  onAddInquiry: (inquiry: CakeQuoteRequest & { id: string; priceEstimate: number; timestamp: string }) => void;
+  preconfigured: { shape: 'round' | 'square' | 'hexagon'; tiers: number; finish: 'smooth_fondant' | 'textured_buttercream' | 'naked_rustic' | 'geode_sculpt'; flavor: string } | null;
+  clearPreconfigured: () => void;
+}
+
+export default function CakeCustomizer({ onAddInquiry, preconfigured, clearPreconfigured }: CakeCustomizerProps) {
+  // Core Customizable States
+  const [shape, setShape] = useState<'round' | 'square' | 'hexagon'>('round');
+  const [tiers, setTiers] = useState<number>(3);
+  const [finish, setFinish] = useState<'smooth_fondant' | 'textured_buttercream' | 'naked_rustic' | 'geode_sculpt'>('textured_buttercream');
+  const [selectedFlavor, setSelectedFlavor] = useState<string>(FLAVORS[0].name);
+  const [selectedAccents, setSelectedAccents] = useState<string[]>([]);
+  
+  // Sizing & Customer Details
+  const [servings, setServings] = useState<number>(50);
+  const [eventDate, setEventDate] = useState<string>('');
+  const [customerName, setCustomerName] = useState<string>('');
+  const [customerEmail, setCustomerEmail] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+
+  // Interface view states
+  const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [latestSavedId, setLatestSavedId] = useState<string>('');
+
+  // Handle preconfigured triggers from the Gallery
+  useEffect(() => {
+    if (preconfigured) {
+      setShape(preconfigured.shape);
+      setTiers(preconfigured.tiers);
+      setFinish(preconfigured.finish);
+      setSelectedFlavor(preconfigured.flavor);
+      // Clean triggers
+      clearPreconfigured();
+      // Scroll to customizer automatically
+      setTimeout(() => {
+        document.getElementById('cake-customizer-app')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [preconfigured, clearPreconfigured]);
+
+  // Pricing Logic
+  const calculatePricing = (): CakeQuoteResponse => {
+    const basePrice = 80; // Standard 10-person tier base
+    
+    // Tier multipliers (each stack has additional material/structural support multiplier)
+    const tierMultiplierMap: Record<number, number> = { 1: 0, 2: 70, 3: 150, 4: 260 };
+    const tierSurcharge = tierMultiplierMap[tiers] || 0;
+
+    // Finish artisan multipliers
+    const finishSurchargeMap = {
+      smooth_fondant: 120,
+      textured_buttercream: 60,
+      naked_rustic: 30,
+      geode_sculpt: 220
+    };
+    const finishSurcharge = finishSurchargeMap[finish] || 0;
+
+    // Accents sums
+    let accentSurcharge = 0;
+    selectedAccents.forEach(accId => {
+      const acc = ACCENTS.find(a => a.id === accId);
+      if (acc) {
+        accentSurcharge += acc.price;
+      }
+    });
+
+    const estimatedTotal = basePrice + tierSurcharge + finishSurcharge + accentSurcharge;
+
+    return {
+      basePrice,
+      tierSurcharge,
+      finishSurcharge,
+      accentSurcharge,
+      estimatedTotal
+    };
+  };
+
+  const pricing = calculatePricing();
+
+  const handleAccentToggle = (accentId: string) => {
+    setSelectedAccents(prev => 
+      prev.includes(accentId) 
+        ? prev.filter(a => a !== accentId) 
+        : [...prev, accentId]
+    );
+  };
+
+  const handleSubmitInquiry = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerName || !customerEmail) return;
+
+    const newId = 'INR-' + Math.floor(1000 + Math.random() * 9000);
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+
+    const newInquiry: CakeQuoteRequest & { id: string; priceEstimate: number; timestamp: string } = {
+      shape,
+      tiers,
+      finish,
+      flavor: selectedFlavor,
+      accents: ACCENTS.filter(a => selectedAccents.includes(a.id)).map(a => a.name.split(' (')[0]),
+      eventDate: eventDate || 'Date to be confirmed',
+      servingsNeeded: servings,
+      name: customerName,
+      email: customerEmail,
+      notes: notes || 'None specified',
+      id: newId,
+      priceEstimate: pricing.estimatedTotal,
+      timestamp: dateStr
+    };
+
+    onAddInquiry(newInquiry);
+    setLatestSavedId(newId);
+    setIsSubmitted(true);
+  };
+
+  const handleReset = () => {
+    setIsSubmitted(false);
+    setSelectedAccents([]);
+    setNotes('');
+  };
+
+  // Rendering styling getters for custom live visual review mockup stack:
+  const getShapeClass = () => {
+    switch (shape) {
+      case 'round': return 'rounded-full';
+      case 'square': return 'rounded-sm';
+      case 'hexagon': return 'clip-hex'; // custom clipping mask styles
+      default: return 'rounded-full';
+    }
+  };
+
+  const getFinishStyles = () => {
+    switch (finish) {
+      case 'smooth_fondant':
+        return 'bg-gradient-to-r from-[#FFFAF2] via-[#F3EDE0] to-[#E7DEC9] border-[#DFD4BA]';
+      case 'textured_buttercream':
+        return 'bg-gradient-to-r from-[#FCF7ED] via-[#F3ECE1] to-[#EAE0CD] border-[#DCD0B7] combed-texture';
+      case 'naked_rustic':
+        return 'bg-gradient-to-r from-[#FAF0DD] via-[#C9B397] to-[#8C6C42]/70 border-[#C1AB8A] naked-texture';
+      case 'geode_sculpt':
+        return 'bg-gradient-to-r from-[#FAF6ED] via-[#ECC9B5] to-[#DCD0B7] border-[#D4C3A3] geode-cavity';
+      default:
+        return 'bg-white border-amber-900/10';
+    }
+  };
+
+  return (
+    <section className="py-20 bg-[#FAF7F2]" id="cake-customizer-app">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Customizer Headers */}
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <span className="text-xs font-semibold uppercase tracking-widest text-amber-850">Interactive Suite</span>
+          <h2 className="font-serif text-3xl sm:text-4xl tracking-tight text-[#2C2621] mt-2 mb-4">
+            Bespoke Custom Cake Designer
+          </h2>
+          <div className="w-12 h-[2px] bg-amber-800 mx-auto mb-6"></div>
+          <p className="font-sans text-sm sm:text-base text-[#60554B]">
+            Configure your dream centerpiece below. Tap specifications to watch our live stacked mockup transform, calculate real-time estimates, and file a formal studio inquiry instantly.
+          </p>
+        </div>
+
+        {isSubmitted ? (
+          /* Submission success receipt visual feedback */
+          <div className="max-w-xl mx-auto bg-white rounded-3xl border border-[#EDE5DC] shadow-xl p-8 text-center animate-scaleIn" id="receipt-screen">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-800 mx-auto mb-6">
+              <Check className="w-8 h-8 font-bold" />
+            </div>
+
+            <span className="text-xs font-mono uppercase tracking-widest text-[#807469]">Inquiry Filed Safely</span>
+            <h3 className="font-serif text-2xl font-bold text-[#2C2621] mt-1 mb-2">Thank you, {customerName}!</h3>
+            <p className="font-sans text-xs sm:text-sm text-[#60554B] leading-relaxed max-w-md mx-auto mb-8">
+              We received your custom cake layout. Our studio cake concierge will reach out to you within 24 hours at <span className="font-semibold text-amber-950">{customerEmail}</span> to confirm event variables and schedule your official tasting plate.
+            </p>
+
+            <div className="bg-[#FAF7F2] rounded-2xl p-6 border border-[#EDE5DC] text-left mb-8 max-w-md mx-auto">
+              <div className="flex justify-between items-center border-b border-[#E8E2D9] pb-3 mb-4">
+                <span className="text-xs font-serif font-bold text-[#2C2621]">Design Spec #{latestSavedId}</span>
+                <span className="text-xs text-[#807469] font-mono">{new Date().toLocaleDateString()}</span>
+              </div>
+
+              <div className="space-y-2 text-xs font-sans text-[#60554B]">
+                <p><strong className="text-[#2C2621]">Structure:</strong> {tiers} Tiers of Custom {shape.toUpperCase()}</p>
+                <p><strong className="text-[#2C2621]">Finish Style:</strong> {finish.replace('_', ' ').toUpperCase()}</p>
+                <p><strong className="text-[#2C2621]">Artisan Flavor:</strong> {selectedFlavor}</p>
+                {selectedAccents.length > 0 && (
+                  <p><strong className="text-[#2C2621]">Selected Accents:</strong> {selectedAccents.map(accId => ACCENTS.find(a => a.id === accId)?.name.split(' (')[0]).join(', ')}</p>
+                )}
+                <p><strong className="text-[#2C2621]">Guest Slices Target:</strong> {servings} Servings</p>
+                <p><strong className="text-[#2C2621]">Event Timing:</strong> {eventDate || 'Confirmed during consult'}</p>
+                <div className="border-t border-[#E8E2D9] pt-3 mt-4 flex justify-between items-center text-sm font-semibold text-amber-950 font-serif">
+                  <span>Calculated Estimate</span>
+                  <span>${pricing.estimatedTotal} USD</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={handleReset}
+                className="px-6 py-3 bg-[#4A3B32] hover:bg-[#322721] text-white font-semibold text-xs uppercase tracking-wider rounded-xl transition-all duration-300"
+              >
+                Design Another Cake
+              </button>
+              <button
+                onClick={() => {
+                  const viewElement = document.getElementById('porfolio-gallery');
+                  if (viewElement) viewElement.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-6 py-3 bg-transparent border border-[#EDE5DC] hover:border-[#4A3B32] text-[#4A3B32] font-semibold text-xs uppercase tracking-wider rounded-xl transition-all duration-300"
+              >
+                Return to Gallery
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Main Double-Pane Studio layout */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch" id="customizer-split-grid">
+            
+            {/* LEFT PANE: DYNAMIC LIVE MOCKUP PREVIEW CANVASES */}
+            <div className="lg:col-span-5 flex flex-col justify-start relative bg-white rounded-3xl border border-[#EDE5DC] p-6 text-center shadow-lg" id="preview-box">
+              <span className="block text-[10px] items-center text-center uppercase tracking-widest text-[#807469] font-mono leading-none mb-6">
+                Active Studio Sketchboard
+              </span>
+
+              {/* Stack visual board wrapper with heights limits */}
+              <div className="flex-1 flex flex-col justify-end items-center h-[320px] sm:h-[380px] py-10 relative">
+                
+                {/* Visual rendering of customizable stacked tiers list */}
+                {Array.from({ length: tiers }).map((_, idx) => {
+                  // Index is 0 to (tiers-1). 
+                  // In a tier cake, index 0 is the top most tier, index (tiers-1) is the bottom most.
+                  // We map from top to bottom (so top tier is plotted first visually if we iterate standard, but let's draw them from bottom up).
+                  const tierIndex = tiers - idx; // 1 is top, `tiers` is bottom
+                  const baseWidth = 80 + (idx * 40); // larger at index 1, 2, 3... bottom is wide, top is narrow
+                  const height = 48 + (idx * 2); // subtle height offset as it grows
+
+                  return (
+                    <div 
+                      key={idx}
+                      className={`relative border-2 shadow-md transition-all duration-500 ease-out flex items-center justify-center ${getShapeClass()} ${getFinishStyles()}`}
+                      style={{
+                        width: `${baseWidth}px`,
+                        height: `${height}px`,
+                        zIndex: 10 + idx,
+                        marginTop: '-16px' // overlap cylinders to appear dimensional
+                      }}
+                    >
+                      {/* Detailed geode cavern visual layer */}
+                      {finish === 'geode_sculpt' && (
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1/4 h-3/4 bg-amber-900/10 border-l border-r border-[#FFF7D4] rounded-lg overflow-hidden flex items-center select-none pointer-events-none">
+                          <span className="text-[10px] text-amber-600 block text-center w-full select-none">✨💎✨</span>
+                        </div>
+                      )}
+
+                      {/* Detailed rustic sponge showing through effect */}
+                      {finish === 'naked_rustic' && (
+                        <div className="absolute inset-x-0 top-1/3 h-1.5 bg-amber-900/35 border-y border-amber-900/10 pointer-events-none opacity-80" />
+                      )}
+
+                      {/* Tier ID tracker debug badge */}
+                      <span className="absolute bottom-1 bg-[#4A3B32]/10 backdrop-blur-[1px] px-1.5 py-0.5 rounded-full text-[9px] text-[#4A3B32] scale-75 select-none pointer-events-none">
+                        Tier {tierIndex}
+                      </span>
+                    </div>
+                  );
+                })}
+
+                {/* Pedestal cake stand block */}
+                <div className="w-[280px] h-4 bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300 rounded-lg border border-gray-300 z-0 -mt-1 shadow-sm relative flex justify-center">
+                  <div className="w-24 h-6 bg-gradient-to-r from-gray-200 to-gray-300 absolute top-full border-x border-b border-gray-300 rounded-b-md" />
+                  <div className="w-48 h-1 bg-white/40 rounded absolute top-0.5" />
+                </div>
+
+                {/* Background design elements indicators overlay */}
+                <div className="absolute top-8 right-6 flex flex-col items-end gap-1.5" id="mockup-overlay">
+                  {selectedFlavor && (
+                    <span className="text-[9px] bg-amber-50 border border-amber-100/50 text-amber-900 px-2 py-0.5 rounded font-medium">
+                      Flavor: {selectedFlavor.split(' & ')[0]}
+                    </span>
+                  )}
+                  <span className="text-[9px] bg-slate-50 border border-slate-200 text-slate-700 px-2 py-0.5 rounded uppercase font-medium">
+                    Shape: {shape}
+                  </span>
+                  <span className="text-[9px] bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded uppercase font-medium">
+                    {tiers} {tiers === 1 ? 'Tier' : 'Tiers'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Dynamic Ledger Pricing summary summary block */}
+              <div className="border-t border-[#EDE5DC] pt-5 text-left" id="live-ledger">
+                <span className="text-[10px] uppercase tracking-widest font-mono text-[#807469] block mb-2">Calculated Billing Estimates</span>
+                <div className="space-y-1 text-xs text-[#60554B]">
+                  <div className="flex justify-between">
+                    <span>Base Tier Materiality:</span>
+                    <span>${pricing.basePrice}</span>
+                  </div>
+                  {pricing.tierSurcharge > 0 && (
+                    <div className="flex justify-between">
+                      <span>Stacked Surcharge ({tiers} Tiers):</span>
+                      <span>+ ${pricing.tierSurcharge}</span>
+                    </div>
+                  )}
+                  {pricing.finishSurcharge > 0 && (
+                    <div className="flex justify-between">
+                      <span>Artisan Finish Work ({finish.replace('_', ' ')}):</span>
+                      <span>+ ${pricing.finishSurcharge}</span>
+                    </div>
+                  )}
+                  {pricing.accentSurcharge > 0 && (
+                    <div className="flex justify-between text-amber-900 font-semibold">
+                      <span>Tier Accent Decoratives ({selectedAccents.length}):</span>
+                      <span>+ ${pricing.accentSurcharge}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-[#E8E2D9] pt-2 mt-2 flex justify-between text-sm text-[#2C2621] font-bold font-serif">
+                    <span>Est. Grand Total:</span>
+                    <span>${pricing.estimatedTotal} USD</span>
+                  </div>
+                  <p className="text-[10px] text-[#A69B8F] italic leading-normal pt-1.5">
+                    *Actual final invoice confirmed during custom sketch-consultations, depends on specific custom floral densities.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT PANE: CONTROL SELECTION ACTIONS & SCHEDULING FORM */}
+            <div className="lg:col-span-7 bg-white rounded-3xl border border-[#EDE5DC] p-6 sm:p-8 shadow-lg text-left" id="control-panel">
+              <form onSubmit={handleSubmitInquiry} className="space-y-8">
+                
+                {/* STEP 1: SHAPES AND TIERS config */}
+                <div>
+                  <div className="flex items-center gap-2 border-b border-[#F2ECE4] pb-2 mb-4">
+                    <span className="w-5 h-5 rounded-full bg-[#4A3B32] text-white flex items-center justify-center text-[10px] font-bold font-sans">1</span>
+                    <h3 className="font-serif text-base font-bold text-[#2C2621]">Base Geometry & Tier Stack</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {/* Shape select */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#807469] uppercase tracking-wider mb-2">Base Canvas Shape</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['round', 'square', 'hexagon'] as const).map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setShape(s)}
+                            className={`py-2 rounded-lg text-xs font-semibold uppercase tracking-wider border transition-all duration-300 ${
+                              shape === s
+                                ? 'bg-[#4A3B32] text-white border-[#4A3B32] shadow-sm'
+                                : 'bg-[#FAF7F2] text-[#60554B] border-[#EDE5DC] hover:border-amber-800/30'
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Tiers select */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#807469] uppercase tracking-wider mb-2">Total Stacked Tiers</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[1, 2, 3, 4].map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setTiers(t)}
+                            className={`py-2 rounded-lg text-xs font-semibold border transition-all duration-300 ${
+                              tiers === t
+                                ? 'bg-[#4A3B32] text-white border-[#4A3B32] shadow-sm2'
+                                : 'bg-[#FAF7F2] text-[#60554B] border-[#EDE5DC] hover:border-amber-800/30'
+                            }`}
+                          >
+                            {t} {t === 1 ? 'Tier' : 'Tiers'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 2: FINISH EXCLUSIVES */}
+                <div>
+                  <div className="flex items-center gap-2 border-b border-[#F2ECE4] pb-2 mb-4">
+                    <span className="w-5 h-5 rounded-full bg-[#4A3B32] text-white flex items-center justify-center text-[10px] font-bold font-sans">2</span>
+                    <h3 className="font-serif text-base font-bold text-[#2C2621]">Artisan Exterior Finishes</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="finishes-grid">
+                    {[
+                      { id: 'smooth_fondant', label: 'Crisp Rolled Fondant', desc: 'Sleek satin finish with razor-edge profiles.', charge: '+$120' },
+                      { id: 'textured_buttercream', label: 'Swiss Buttercream', desc: 'Combed, stucco, or elegant horizontal ripples.', charge: '+$60' },
+                      { id: 'naked_rustic', label: 'Naked / Scraped Cake', desc: 'Delicate light scrapes letting warm cake show.', charge: '+$30' },
+                      { id: 'geode_sculpt', label: 'Couture Geode Cave', desc: 'Sugar crystal cave with raw 24k gold leaf.', charge: '+$220' }
+                    ].map((fin) => (
+                      <button
+                        key={fin.id}
+                        type="button"
+                        onClick={() => setFinish(fin.id as any)}
+                        className={`p-4 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-full ${
+                          finish === fin.id
+                            ? 'border-amber-800 bg-amber-50/40 ring-1 ring-amber-850/5 shadow-sm'
+                            : 'border-[#EDE5DC] bg-[#FAF7F2]/50 hover:border-amber-800/40'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex justify-between items-center">
+                            <h4 className="font-serif text-xs font-bold text-[#2C2621]">{fin.label}</h4>
+                            <span className="text-[10px] font-mono font-bold text-amber-900">{fin.charge}</span>
+                          </div>
+                          <p className="text-[10px] text-[#7A6E63] mt-1 leading-normal">{fin.desc}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* STEP 3: FLAVORS COMBINATIONS */}
+                <div>
+                  <div className="flex items-center gap-2 border-b border-[#F2ECE4] pb-2 mb-4">
+                    <span className="w-5 h-5 rounded-full bg-[#4A3B32] text-white flex items-center justify-center text-[10px] font-bold font-sans">3</span>
+                    <h3 className="font-serif text-base font-bold text-[#2C2621]">Gourmet Cake Flavors</h3>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {FLAVORS.map((f) => {
+                      const isSelected = selectedFlavor === f.name;
+                      return (
+                        <button
+                          key={f.name}
+                          type="button"
+                          onClick={() => setSelectedFlavor(f.name)}
+                          className={`w-full p-3.5 rounded-xl border text-left transition-all duration-300 flex items-center justify-between ${
+                            isSelected
+                              ? 'border-amber-800 bg-amber-50/40'
+                              : 'border-[#EDE5DC] bg-white hover:border-amber-800/30'
+                          }`}
+                        >
+                          <div className="max-w-[85%]">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-serif text-xs font-bold text-[#2C2621]">{f.name}</h4>
+                              <span className="text-[9px] bg-amber-100/60 px-2 py-0.5 rounded text-amber-950 font-sans tracking-wide">
+                                {f.intensity}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-[#7A6E63] mt-0.5 leading-normal">{f.description}</p>
+                          </div>
+                          <div className="shrink-0 flex items-center justify-center">
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                              isSelected ? 'bg-amber-850 border-amber-850 text-white' : 'border-[#EDE5DC]'
+                            }`}>
+                              {isSelected && <Check className="w-2.5 h-2.5 font-bold" />}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* STEP 4: ACCENT DETAILS */}
+                <div>
+                  <div className="flex items-center gap-2 border-b border-[#F2ECE4] pb-2 mb-4">
+                    <span className="w-5 h-5 rounded-full bg-[#4A3B32] text-white flex items-center justify-center text-[10px] font-bold font-sans">4</span>
+                    <h3 className="font-serif text-base font-bold text-[#2C2621]">Artistic Accents Accessories</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="accents-selection">
+                    {ACCENTS.map((v) => {
+                      const isChecked = selectedAccents.includes(v.id);
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => handleAccentToggle(v.id)}
+                          className={`p-3.5 rounded-xl border text-left transition-all duration-300 flex items-center justify-between ${
+                            isChecked
+                              ? 'border-amber-800 bg-amber-50/40 shadow-sm'
+                              : 'border-[#EDE5DC] bg-[#FAF7F2]/40 hover:border-amber-800/25'
+                          }`}
+                        >
+                          <span className="text-xs font-serif text-[#2C2621]">{v.name}</span>
+                          <div className="shrink-0">
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                              isChecked ? 'bg-amber-850 border-amber-850 text-white' : 'border-gray-300'
+                            }`}>
+                              {isChecked && <Check className="w-2.5 h-2.5 font-bold" />}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* STEP 5: BOOKING VARIABLES */}
+                <div>
+                  <div className="flex items-center gap-2 border-b border-[#F2ECE4] pb-2 mb-4">
+                    <span className="w-5 h-5 rounded-full bg-[#4A3B32] text-white flex items-center justify-center text-[10px] font-bold font-sans">5</span>
+                    <h3 className="font-serif text-base font-bold text-[#2C2621]">Event Sizing & Contact Information</h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Name input */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#807469] uppercase tracking-wider mb-1.5">Full Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Lord/Lady Sterling"
+                          value={customerName}
+                          onChange={(e) => setCustomerName(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-lg border border-[#EDE5DC] focus:ring-1 focus:ring-amber-800 font-sans text-xs sm:text-sm text-[#2C2621] placeholder-[#A69B8F] focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Email input */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#807469] uppercase tracking-wider mb-1.5">Email *</label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="client@noble.com"
+                          value={customerEmail}
+                          onChange={(e) => setCustomerEmail(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-lg border border-[#EDE5DC] focus:ring-1 focus:ring-amber-800 font-sans text-xs sm:text-sm text-[#2C2621] placeholder-[#A69B8F] focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Servings slider */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-xs font-semibold text-[#807469] uppercase tracking-wider">Required Slices (Servings)</label>
+                          <span className="text-xs font-bold text-amber-950 px-2 py-0.5 bg-amber-50 rounded border border-amber-100">{servings} guests</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="10"
+                          max="200"
+                          step="5"
+                          value={servings}
+                          onChange={(e) => setServings(Number(e.target.value))}
+                          className="w-full accent-amber-800"
+                        />
+                      </div>
+
+                      {/* Event Date picker */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#807469] uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-amber-800" />
+                          <span>Event Date</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={eventDate}
+                          onChange={(e) => setEventDate(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-lg border border-[#EDE5DC] focus:ring-1 focus:ring-amber-800 font-sans text-xs sm:text-sm text-[#2C2621] focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Special requests notes */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#807469] uppercase tracking-wider mb-1.5">Bespoke Requests & Delivery Venue Coordinates</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Please detail allergen guidelines, custom florist coordination notes, themed details, or preferred physical delivery locations..."
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg border border-[#EDE5DC] focus:ring-1 focus:ring-amber-800 font-sans text-xs sm:text-sm text-[#2C2621] placeholder-[#A69B8F] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SUBMIT BUTTON */}
+                <div className="pt-4 border-t border-[#F2ECE4]">
+                  <button
+                    type="submit"
+                    className="w-full py-4 bg-[#4A3B32] hover:bg-[#322721] text-white font-semibold text-xs tracking-wider uppercase rounded-xl shadow-md transition-all duration-300 flex items-center justify-center gap-2"
+                    id="submit-inquiry-btn"
+                  >
+                    <Receipt className="w-4 h-4 text-amber-300 animate-pulse" />
+                    <span>File Bespoke Quote Inquiry</span>
+                  </button>
+                  <p className="text-[10px] text-center text-[#7A6E63] mt-2.5">
+                    *Filing does not bind booking. A 50% retainer deposit is required only after design sketches are finalized in consultation.
+                  </p>
+                </div>
+
+              </form>
+            </div>
+
+          </div>
+        )}
+
+      </div>
+    </section>
+  );
+}

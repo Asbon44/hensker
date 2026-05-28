@@ -1,0 +1,6 @@
+{
+  "name": "Henkar Cakes",
+  "description": "Bespoke luxury custom cakes and artful confections designed for life's most beautiful celebrations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
